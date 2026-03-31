@@ -315,7 +315,7 @@ if user_input:
     ):
         rag_context, sources = st.session_state.rag_engine.get_context_with_sources(user_input)
         # rag_context = st.session_state.rag_engine.get_context(user_input)
-        # st.write(f"[调试] RAG检索结果长度：{len(rag_context)}")  #调试用
+        st.write(f"[调试] RAG检索结果长度：{len(rag_context)}")  #调试用
         # 提取来源文件名供展示
         # results = st.session_state.rag_engine.retrieve(user_input)
         # sources = []
