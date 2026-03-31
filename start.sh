@@ -35,7 +35,8 @@ echo "访问地址: http://$(hostname -I | awk '{print $1}'):8501"
 echo ""
 
 # 启动 Streamlit
-streamlit run app.py \
+export PYTHONPATH=.
+streamlit run src/app.py \
     --server.port 8501 \
     --server.address 0.0.0.0 \
     --server.headless true
