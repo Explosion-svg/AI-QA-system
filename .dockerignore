@@ -1,0 +1,38 @@
+# 虚拟环境（不需要打包进镜像，镜像内会重新安装）
+venv/
+env/
+.venv/
+
+# 环境变量（敏感信息，不打包）
+.env
+
+# 数据目录（运行时挂载，不打包进镜像）
+chat_history/
+knowledge_base/
+vector_db/
+hf_cache/
+ollama_models/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 日志
+*.log
+logs/
+
+# Git
+.git/
+.gitignore
+
+# 文档（不需要打包进镜像）
+*.md
+
+# IDE
+.vscode/
+.idea/
+
+# 系统文件
+.DS_Store
+Thumbs.db

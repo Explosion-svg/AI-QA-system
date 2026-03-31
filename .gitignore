@@ -1,0 +1,41 @@
+# 环境变量（含 API Key，绝对不能提交）
+.env
+
+# 虚拟环境
+venv/
+env/
+.venv/
+
+# 向量数据库（体积大，本地生成）
+vector_db/
+
+# 聊天记录（用户隐私数据）
+chat_history/
+
+# 知识库文档（用户上传的文件）
+knowledge_base/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# 日志文件
+*.log
+logs/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 临时文件
+*.tmp
+*.bak

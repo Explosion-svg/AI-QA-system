@@ -1,0 +1,30 @@
+[server]
+# 监听端口
+port = 8501
+# 监听地址：0.0.0.0 允许外网访问，127.0.0.1 仅本机访问
+address = "0.0.0.0"
+# 服务器模式：true = 不自动打开浏览器（部署时必须设为 true）
+headless = true
+# 文件上传大小限制（MB）
+maxUploadSize = 200
+# 关闭 CORS 限制（局域网部署时设为 false）
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+# 关闭使用统计上报
+gatherUsageStats = false
+# 服务器地址（填写你的服务器 IP 或域名，本地开发留空）
+# serverAddress = "your-server-ip-or-domain"
+
+[theme]
+# 界面主题：light 或 dark
+base = "light"
+# 主色调
+primaryColor = "#1890ff"
+# 背景色
+backgroundColor = "#ffffff"
+# 侧边栏背景色
+secondaryBackgroundColor = "#f0f2f6"
+# 文字颜色
+textColor = "#262730"
