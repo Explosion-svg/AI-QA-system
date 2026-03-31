@@ -1,5 +1,7 @@
 # AI 问答系统
 
+A lightweight RAG-based AI assistant built with Python.
+
 支持 OpenAI / DeepSeek / Qwen / Ollama 的全功能 AI 问答系统，具备流式输出、RAG 知识库、多轮对话、聊天记录保存等功能。
 
 ---
