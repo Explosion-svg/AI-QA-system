@@ -9,18 +9,30 @@ A lightweight RAG-based AI assistant built with Python.
 ## 项目结构
 
 ```
-program3/
-├── .env.example        # API Key 配置模板
-├── requirements.txt    # 依赖列表
-├── config.py           # 全局配置
-├── llm_client.py       # 统一 LLM 客户端（流式 + 非流式）
-├── history_manager.py  # 聊天记录自动保存与加载
-├── rag_engine.py       # RAG 知识库引擎
-├── cli.py              # 命令行工具
-├── app.py              # Streamlit 前端
-├── chat_history/       # 自动保存的对话记录（运行后生成）
-├── knowledge_base/     # 知识库文档目录（运行后生成）
-└── vector_db/          # 向量数据库（构建知识库后生成）
+src/
+├── api/                    # API 层
+│   ├── __init__.py
+│   └── schemas.py         # Pydantic 数据模型
+│
+├── services/              # 业务逻辑层
+│   ├── __init__.py
+│   ├── chat_service.py    # 对话服务
+│   ├── session_service.py # 会话管理服务
+│   └── upload_service.py  # 文档上传服务
+│
+├── core/                  # 核心功能层
+│   ├── __init__.py
+│   ├── llm_client.py      # LLM 客户端
+│   ├── rag_engine.py      # RAG 引擎
+│   ├── parser.py          # 文档解析器
+│   └── storage.py         # 文件存储管理器
+│
+├── utils/                 # 工具层
+│   ├── __init__.py
+│   └── history_manager.py # 历史记录管理
+│
+├── config.py              # 全局配置
+└── cli.py                 # CLI 入口
 ```
 
 ---
