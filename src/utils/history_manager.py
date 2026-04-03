@@ -19,9 +19,13 @@ history_manager.py —— 聊天记录管理器
 from __future__ import annotations
 import json
 import time
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
 from typing import List, Dict
-from config import CHAT_SAVE_DIR, MAX_HISTORY
+from src.config import CHAT_SAVE_DIR, MAX_HISTORY
 
 
 class HistoryManager:
@@ -159,3 +163,39 @@ class HistoryManager:
         示例返回值："session_20240101_153045"
         """
         return time.strftime("session_%Y%m%d_%H%M%S")
+
+
+if __name__ == "__main__":
+    """
+    测试 HistoryManager
+    运行：python -m src.history_manager
+    """
+    print("=" * 50)
+    print("测试 HistoryManager")
+    print("=" * 50)
+
+    mgr = HistoryManager()
+
+    # 测试添加对话
+    print("\n[测试 1] 添加对话")
+    mgr.add("你好", "你好！有什么可以帮你？")
+    mgr.add("今天天气怎么样？", "今天天气晴朗，气温 25℃。")
+    print(f"当前历史记录数: {len(mgr.get_history())}")
+
+    # 测试保存
+    print("\n[测试 2] 保存会话")
+    session_id = HistoryManager.new_session_id()
+    path = mgr.save(session_id, mgr.get_history(), {"test": True})
+    print(f"已保存到: {path}")
+
+    # 测试加载
+    print("\n[测试 3] 加载会话")
+    loaded = mgr.load(session_id)
+    print(f"加载了 {len(loaded)} 条消息")
+
+    # 测试列出会话
+    print("\n[测试 4] 列出所有会话")
+    sessions = mgr.list_sessions()
+    print(f"共有 {len(sessions)} 个会话")
+
+    print("\n✅ 测试完成")

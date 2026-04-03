@@ -8,6 +8,7 @@ config.py —— 全局配置中心
 
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
 # 加载 .env 文件中的环境变量（API Key 等敏感信息放在那里，不写死在代码里）
 load_dotenv()
@@ -97,9 +98,45 @@ def get_api_key(provider: str) -> str | None:
 
 def get_base_url(provider: str) -> str:
     """返回指定提供商的 API 请求地址。"""
+    if provider not in PROVIDERS:
+        raise ValueError(f"Unsupported provider: {provider}")
     return PROVIDERS[provider]["base_url"]
 
 
 def list_providers() -> list:
     """返回所有支持的提供商代号列表，例如 ['openai', 'deepseek', 'qwen', 'ollama']。"""
     return list(PROVIDERS.keys())
+
+import logging
+from logging.handlers import RotatingFileHandler
+
+def setup_logging(level: str = 'INFO'):
+    # 确保日志目录存在
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "app.log"
+
+    # 日志格式
+    log_format = "%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+
+    # 1. 终端处理器（输出到屏幕）
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter(log_format, datefmt="%H:%M:%S"))
+
+    # 2. 轮转文件处理器（输出到文件，10MB 轮转一次，保留 5 个旧文件）
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5,
+        encoding="utf-8"
+    )
+    file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+
+    # 全局配置
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        handlers=[console_handler, file_handler]
+    )
+
+

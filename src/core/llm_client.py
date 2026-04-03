@@ -10,9 +10,13 @@ llm_client.py —— 统一 AI 对话接口
 
 from __future__ import annotations
 import os
+import logging
 from typing import Generator, List, Dict
+
+logger = logging.getLogger(__name__)
+
 from openai import OpenAI   # 所有服务商都用这一个库来调用
-from config import PROVIDERS, get_api_key, get_base_url
+from src.config import PROVIDERS, get_api_key, get_base_url
 
 
 class LLMClient:
@@ -38,6 +42,7 @@ class LLMClient:
         """
         api_key = get_api_key(self.provider) or "ollama"  # Ollama 不验证 Key
         base_url = get_base_url(self.provider)
+        logger.info(f"构建 LLM 客户端: provider={self.provider}, base_url={base_url}")
         return OpenAI(api_key=api_key, base_url=base_url)
 
     def switch(self, provider: str, model: str):
@@ -149,3 +154,35 @@ class LLMClient:
             except Exception:
                 pass   # 连接失败则返回默认列表
         return PROVIDERS[self.provider]["models"]
+
+
+if __name__ == "__main__":
+    """
+    测试 LLMClient
+    运行：python -m src.llm_client
+    """
+    print("=" * 50)
+    print("测试 LLMClient")
+    print("=" * 50)
+
+    # 测试初始化
+    client = LLMClient(provider="openai", model="gpt-3.5-turbo")
+    print(f"✅ 客户端初始化成功: {client.provider}/{client.model}")
+    print(f"API Key 可用: {client.is_available()}")
+
+    # 测试对话
+    if client.is_available():
+        print("\n[测试] 发送简单对话...")
+        try:
+            answer = client.chat(
+                user_message="用一句话介绍 Python",
+                history=[],
+                max_tokens=50
+            )
+            print(f"回答: {answer}")
+        except Exception as e:
+            print(f"❌ 对话失败: {e}")
+    else:
+        print("⚠️ API Key 未配置，跳过对话测试")
+
+    print("\n✅ 测试完成")
