@@ -18,7 +18,8 @@ services:
     restart: unless-stopped  # 崩溃自动重启，手动 stop 不重启
 
     ports:
-      - "8501:8501"         # 宿主机端口:容器端口
+      - "8501:8501"         # Streamlit 界面
+      - "8000:8000"         # FastAPI 接口
 
     env_file:
       - .env                # 自动加载 .env 文件中的环境变量

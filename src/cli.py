@@ -20,10 +20,16 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from config import PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL, MAX_HISTORY
-from llm_client import LLMClient
-from history_manager import HistoryManager
-from rag_engine import RAGEngine
+from src.config import PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL, MAX_HISTORY, setup_logging
+import logging
+
+# 初始化日志
+setup_logging()
+logger = logging.getLogger(__name__)
+
+from src.core.llm_client import LLMClient
+from src.utils.history_manager import HistoryManager
+from src.core.rag_engine import RAGEngine
 
 # typer 应用实例
 app = typer.Typer(help="AI 问答系统 CLI — 支持 OpenAI / DeepSeek / Qwen / Ollama")
