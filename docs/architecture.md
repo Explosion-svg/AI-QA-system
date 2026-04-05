@@ -163,21 +163,3 @@ RAG_TOP_K=4
 KNOWLEDGE_DIR=knowledge_base
 CHAT_SAVE_DIR=chat_history
 ```
-
-## 重构完成
-
-本次重构已完成以下工作：
-
-1. ✅ 创建分层架构目录结构
-2. ✅ 重构infra层（llm_client、embedding_model、config、logger）
-3. ✅ 重构index层（vector_store、chroma_store、document_loader）
-4. ✅ 重构rag层（rag_engine、rewrite、retriever、rerank、context_filter、prompt_builder）
-5. ✅ 重构memory层（history_manager）
-6. ✅ 创建API层（chat_api、upload_api）
-7. ✅ 更新services层（chat_service、upload_service）
-8. ✅ 创建container.py依赖注入容器
-9. ✅ 创建main.py启动入口
-10. ✅ 更新requirements.txt
-11. ✅ 更新导入路径
-
-项目已按照企业级标准完成工程化改造。
