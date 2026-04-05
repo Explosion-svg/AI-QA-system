@@ -89,7 +89,6 @@ curl -X POST "http://localhost:8000/chat/" \
 - ChromaDB - 向量数据库
 - LangChain - 文档处理
 - sentence-transformers - Embedding和Reranker
-- rank-bm25 - BM25检索
 
 ## License
 
