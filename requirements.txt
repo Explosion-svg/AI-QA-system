@@ -1,24 +1,37 @@
-# 核心依赖
-openai>=1.0.0
-python-dotenv>=1.0.0
-streamlit>=1.32.0
-streamlit-chat>=0.1.1
+# RAG系统依赖包
+# ==================
 
-# RAG 知识库
-langchain>=0.1.0
-langchain-community>=0.0.20
-langchain-openai>=0.0.8
-chromadb>=0.4.22
-sentence-transformers>=2.5.1
-faiss-cpu>=1.7.4
-pypdf>=4.0.0
-python-docx>=1.1.0
+# Web框架
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.5
 
-# 本地模型支持
-ollama>=0.1.7
+# LLM客户端
+openai==1.59.7
 
-# 工具
-rich>=13.7.0
-typer>=0.9.0
-httpx>=0.26.0
-tiktoken>=0.6.0
+# 向量数据库
+chromadb==0.5.23
+
+# LangChain生态
+langchain==0.3.14
+langchain-community==0.3.14
+langchain-core==0.3.28
+langchain-text-splitters==0.3.4
+
+# Embedding和Reranker
+sentence-transformers==3.3.1
+
+# BM25检索
+rank-bm25==0.2.2
+
+# 文档解析
+pypdf==5.1.0
+python-docx==1.1.2
+
+# 工具库
+python-dotenv==1.0.1
+typer==0.15.1
+rich==13.9.4
+
+# HTTP客户端
+httpx==0.28.1

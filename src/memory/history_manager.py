@@ -19,9 +19,13 @@ history_manager.py —— 聊天记录管理器
 from __future__ import annotations
 import json
 import time
+import logging
 from pathlib import Path
-from typing import List, Dict
-from config import CHAT_SAVE_DIR, MAX_HISTORY
+
+logger = logging.getLogger(__name__)
+
+from typing import Any, Dict, List
+from src.infra.config import CHAT_SAVE_DIR, MAX_HISTORY
 
 
 class HistoryManager:
@@ -41,6 +45,26 @@ class HistoryManager:
         self._current: List[Dict] = []   # 当前会话的消息列表（内存中）
 
     # ==============================================================
+    # 新增：结构化记忆状态
+    # 说明：
+    # - session_summary：长期摘要
+    # - rolling_summary：中期滚动摘要
+    # - recent_messages：最近原始消息
+    # ==============================================================
+
+    @staticmethod
+    def empty_memory_state() -> Dict[str, Any]:
+        return {
+            "session_summary": "",
+            "rolling_summary": "",
+            "recent_messages": [],
+            "stats": {
+                "total_turns": 0,
+                "summary_version": 0,
+            },
+        }
+
+    # ==============================================================
     # 当前会话操作（内存层面）
     # ==============================================================
 
@@ -55,7 +79,8 @@ class HistoryManager:
         self._current.append({"role": "user",      "content": user})
         self._current.append({"role": "assistant", "content": assistant})
 
-        # 超出上限时，从最旧的消息开始删除（每轮 = 2 条消息）
+        # 兼容旧接口：内存态仍然保留一个有限窗口。
+        # 新的“摘要压缩”主流程已迁移到 MemoryManager，这里不再承担复杂记忆策略。
         if len(self._current) > self.max_history * 2:
             self._current = self._current[-(self.max_history * 2):]
 
@@ -95,7 +120,25 @@ class HistoryManager:
             "session_id": session_id,
             "saved_at":   time.strftime("%Y-%m-%d %H:%M:%S"),
             "meta":       meta or {},
-            "messages":   messages,
+            "messages":   list(messages),
+        }
+        path = self.save_dir / f"{session_id}.json"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return path
+
+    def save_memory_state(self, session_id: str, memory: Dict[str, Any], meta: dict = None) -> Path:
+        """
+        新增：保存结构化会话记忆。
+        为兼容旧调用方，同时额外写入一份 messages 字段，内容为“摘要 + 最近消息”。
+        """
+        normalized = self._normalize_memory_state(memory)
+        data = {
+            "session_id": session_id,
+            "saved_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "meta": meta or {},
+            "memory": normalized,
+            "messages": self.build_messages_from_memory(normalized),
         }
         path = self.save_dir / f"{session_id}.json"
         with open(path, "w", encoding="utf-8") as f:
@@ -123,7 +166,27 @@ class HistoryManager:
             return []
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return data.get("messages", [])
+        if "memory" in data:
+            return self.build_messages_from_memory(data["memory"])
+        return list(data.get("messages", []))
+
+    def load_memory_state(self, session_id: str) -> Dict[str, Any]:
+        """
+        新增：加载结构化记忆状态。
+        兼容老格式：如果历史文件只有 messages，就自动转成新结构。
+        """
+        path = self.save_dir / f"{session_id}.json"
+        if not path.exists():
+            return self.empty_memory_state()
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if "memory" in data:
+            return self._normalize_memory_state(data["memory"])
+
+        memory = self.empty_memory_state()
+        memory["recent_messages"] = list(data.get("messages", []))
+        memory["stats"]["total_turns"] = len(memory["recent_messages"]) // 2
+        return memory
 
     def list_sessions(self) -> List[str]:
         """
@@ -150,6 +213,49 @@ class HistoryManager:
             return True
         return False
 
+    def _trim_messages(self, messages: List[Dict]) -> List[Dict]:
+        # 兼容旧代码保留，当前主流程不再依赖“直接裁剪最老消息”。
+        # 超过最大窗口，裁剪第一条消息
+        max_messages = self.max_history * 2
+        trimmed = list(messages[-max_messages:]) if len(messages) > max_messages else list(messages)
+        while trimmed and trimmed[0].get("role") != "user":
+            trimmed = trimmed[1:]
+        return trimmed
+
+    def build_messages_from_memory(self, memory: Dict[str, Any]) -> List[Dict]:
+        """
+        新增：把结构化记忆转换成可直接喂给 LLM 的消息列表。
+        """
+        normalized = self._normalize_memory_state(memory)
+        messages: List[Dict[str, str]] = []
+        session_summary = normalized.get("session_summary", "").strip()
+        rolling_summary = normalized.get("rolling_summary", "").strip()
+
+        if session_summary:
+            messages.append({
+                "role": "system",
+                "content": f"以下是当前会话的长期摘要，请把它视为已确认背景：\n{session_summary}",
+            })
+        if rolling_summary:
+            messages.append({
+                "role": "system",
+                "content": f"以下是近期对话的滚动摘要，请延续这些上下文：\n{rolling_summary}",
+            })
+
+        messages.extend(normalized.get("recent_messages", []))
+        return messages
+
+    def _normalize_memory_state(self, memory: Dict[str, Any]) -> Dict[str, Any]:
+        base = self.empty_memory_state()
+        base.update({
+            "session_summary": memory.get("session_summary", "") or "",
+            "rolling_summary": memory.get("rolling_summary", "") or "",
+            "recent_messages": list(memory.get("recent_messages", []) or []),
+        })
+        stats = base["stats"]
+        stats.update(memory.get("stats", {}) or {})
+        return base
+
     @staticmethod
     def new_session_id() -> str:
         """
@@ -159,3 +265,39 @@ class HistoryManager:
         示例返回值："session_20240101_153045"
         """
         return time.strftime("session_%Y%m%d_%H%M%S")
+
+
+if __name__ == "__main__":
+    """
+    测试 HistoryManager
+    运行：python -m src.history_manager
+    """
+    print("=" * 50)
+    print("测试 HistoryManager")
+    print("=" * 50)
+
+    mgr = HistoryManager()
+
+    # 测试添加对话
+    print("\n[测试 1] 添加对话")
+    mgr.add("你好", "你好！有什么可以帮你？")
+    mgr.add("今天天气怎么样？", "今天天气晴朗，气温 25℃。")
+    print(f"当前历史记录数: {len(mgr.get_history())}")
+
+    # 测试保存
+    print("\n[测试 2] 保存会话")
+    session_id = HistoryManager.new_session_id()
+    path = mgr.save(session_id, mgr.get_history(), {"test": True})
+    print(f"已保存到: {path}")
+
+    # 测试加载
+    print("\n[测试 3] 加载会话")
+    loaded = mgr.load(session_id)
+    print(f"加载了 {len(loaded)} 条消息")
+
+    # 测试列出会话
+    print("\n[测试 4] 列出所有会话")
+    sessions = mgr.list_sessions()
+    print(f"共有 {len(sessions)} 个会话")
+
+    print("\n✅ 测试完成")
