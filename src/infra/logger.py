@@ -29,12 +29,13 @@ def setup_logger(
         配置好的logger实例
     """
     logger = logging.getLogger(name)
+    root_logger = logging.getLogger()
 
     # 避免重复添加handler
-    if logger.handlers:
+    if root_logger.handlers:
+        root_logger.setLevel(level)
+        logger.setLevel(level)
         return logger
-
-    logger.setLevel(level)
 
     # 默认格式
     if format_string is None:
@@ -46,7 +47,7 @@ def setup_logger(
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+    root_logger.addHandler(console_handler)
 
     # 文件handler（可选）
     if log_file:
@@ -56,7 +57,10 @@ def setup_logger(
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        root_logger.addHandler(file_handler)
+
+    root_logger.setLevel(level)
+    logger.setLevel(level)
 
     return logger
 

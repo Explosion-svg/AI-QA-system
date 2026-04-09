@@ -7,13 +7,29 @@ container.py —— 依赖注入容器
 import logging
 from typing import Optional
 
-from src.infra.llm_client import LLMClient
 from src.infra.embedding_model import EmbeddingModel
-from src.infra.config import DEFAULT_PROVIDER, DEFAULT_MODEL, EMBEDDING_MODEL
+from src.infra.config import (
+    CHAT_SAVE_DIR,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    EMBEDDING_MODEL,
+    MAX_HISTORY,
+    RAG_CONTEXT_TOP_K,
+    RAG_DENSE_TOP_K,
+    RAG_FUSION_TOP_K,
+    RAG_MAX_CONTEXT_LENGTH,
+    RAG_MIN_CHUNK_LENGTH,
+    RAG_RERANK_TOP_K,
+    RAG_SPARSE_TOP_K,
+    RRF_K,
+    VECTOR_COLLECTION_NAME,
+    VECTOR_DB_DIR,
+)
 from src.index.chroma_store import ChromaStore
 from src.index.document_loader import DocumentLoader
 from src.rag.rag_engine import RAGEngine
 from src.memory.history_manager import HistoryManager
+from src.memory.memory_manager import MemoryManager
 from src.services.chat_service import ChatService
 from src.services.upload_service import UploadService
 
@@ -28,8 +44,6 @@ class Container:
 
     def __init__(self):
         """初始化容器"""
-        # 基础设施层
-        self._llm_client: Optional[LLMClient] = None
         self._embedding_model: Optional[EmbeddingModel] = None
 
         # 索引层
@@ -41,6 +55,7 @@ class Container:
 
         # 记忆层
         self._history_manager: Optional[HistoryManager] = None
+        self._memory_manager: Optional[MemoryManager] = None
 
         # 业务层
         self._chat_service: Optional[ChatService] = None
@@ -51,16 +66,6 @@ class Container:
     # ============================================================
     # 基础设施层
     # ============================================================
-
-    def llm_client(self) -> LLMClient:
-        """获取LLM客户端"""
-        if self._llm_client is None:
-            self._llm_client = LLMClient(
-                provider=DEFAULT_PROVIDER,
-                model=DEFAULT_MODEL
-            )
-            logger.info("[Container] LLMClient已创建")
-        return self._llm_client
 
     def embedding_model(self) -> EmbeddingModel:
         """获取Embedding模型"""
@@ -77,8 +82,8 @@ class Container:
         """获取向量存储"""
         if self._vector_store is None:
             self._vector_store = ChromaStore(
-                collection_name="vector_store",
-                persist_directory="vector_db",
+                collection_name=VECTOR_COLLECTION_NAME,
+                persist_directory=VECTOR_DB_DIR,
                 embedding_model=self.embedding_model()
             )
             logger.info("[Container] ChromaStore已创建")
@@ -87,7 +92,6 @@ class Container:
     def document_loader(self) -> DocumentLoader:
         """获取文档加载器"""
         if self._document_loader is None:
-            from src.infra.config import CHUNK_SIZE, CHUNK_OVERLAP
             self._document_loader = DocumentLoader(
                 chunk_size=CHUNK_SIZE,
                 chunk_overlap=CHUNK_OVERLAP
@@ -104,7 +108,15 @@ class Container:
         if self._rag_engine is None:
             self._rag_engine = RAGEngine(
                 vector_store=self.vector_store(),
-                document_loader=self.document_loader()
+                document_loader=self.document_loader(),
+                dense_top_k=RAG_DENSE_TOP_K,
+                sparse_top_k=RAG_SPARSE_TOP_K,
+                fusion_top_k=RAG_FUSION_TOP_K,
+                rerank_top_k=RAG_RERANK_TOP_K,
+                context_top_k=RAG_CONTEXT_TOP_K,
+                rrf_k=RRF_K,
+                min_chunk_length=RAG_MIN_CHUNK_LENGTH,
+                max_context_length=RAG_MAX_CONTEXT_LENGTH,
             )
             logger.info("[Container] RAGEngine已创建")
         return self._rag_engine
@@ -116,13 +128,21 @@ class Container:
     def history_manager(self) -> HistoryManager:
         """获取历史管理器"""
         if self._history_manager is None:
-            from src.infra.config import CHAT_SAVE_DIR, MAX_HISTORY
             self._history_manager = HistoryManager(
                 save_dir=CHAT_SAVE_DIR,
                 max_history=MAX_HISTORY
             )
             logger.info("[Container] HistoryManager已创建")
         return self._history_manager
+
+    def memory_manager(self) -> MemoryManager:
+        """获取会话记忆管理器"""
+        if self._memory_manager is None:
+            self._memory_manager = MemoryManager(
+                history_manager=self.history_manager(),
+            )
+            logger.info("[Container] MemoryManager已创建")
+        return self._memory_manager
 
     # ============================================================
     # 业务层
@@ -134,7 +154,7 @@ class Container:
             self._chat_service = ChatService(
                 rag_engine=self.rag_engine(),
                 history_manager=self.history_manager(),
-                llm_client=self.llm_client()
+                memory_manager=self.memory_manager(),
             )
             logger.info("[Container] ChatService已创建")
         return self._chat_service

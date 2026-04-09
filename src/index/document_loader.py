@@ -5,8 +5,9 @@ document_loader.py —— 文档加载器
 """
 
 import logging
+import hashlib
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from langchain_community.document_loaders import (
     Docx2txtLoader,
@@ -22,10 +23,10 @@ logger = logging.getLogger(__name__)
 class DocumentLoader:
     """
     文档加载器
-    支持PDF、TXT、DOCX格式
+    支持 PDF、TXT、MD、DOCX 格式
     """
 
-    SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".docx", ".doc"}
+    SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".doc"}
 
     def __init__(
         self,
@@ -42,6 +43,7 @@ class DocumentLoader:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
+        # 语义切分
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
@@ -96,7 +98,7 @@ class DocumentLoader:
 
             if suffix == ".pdf":
                 loader = PyPDFLoader(str(path))
-            elif suffix == ".txt":
+            elif suffix in {".txt", ".md"}:
                 loader = TextLoader(str(path), encoding="utf-8")
             elif suffix in [".docx", ".doc"]:
                 loader = Docx2txtLoader(str(path))
@@ -106,10 +108,15 @@ class DocumentLoader:
             # 加载文档
             documents = loader.load()
 
+            file_hash = self._calculate_file_hash(path)
+            doc_id = self._build_doc_id(path)
+
             # 添加元数据
             for doc in documents:
                 doc.metadata["source"] = path.name
                 doc.metadata["file_path"] = str(path)
+                doc.metadata["doc_id"] = doc_id
+                doc.metadata["file_hash"] = file_hash
 
             logger.info(f"[DocumentLoader] 加载成功: {len(documents)} 个原始文档")
             return documents
@@ -132,6 +139,23 @@ class DocumentLoader:
             return []
 
         chunks = self.text_splitter.split_documents(documents)
+
+        for index, chunk in enumerate(chunks):
+            page = chunk.metadata.get("page", chunk.metadata.get("page_number", 0))
+            source = chunk.metadata.get("source", "unknown")
+            doc_id = chunk.metadata.get("doc_id", source)
+            content_hash = hashlib.sha1(
+                chunk.page_content.encode("utf-8", errors="ignore")
+            ).hexdigest()
+
+            chunk.metadata["chunk_index"] = index
+            chunk.metadata["page"] = page
+            chunk.metadata["char_length"] = len(chunk.page_content)
+            chunk.metadata["content_hash"] = content_hash
+            chunk.metadata["chunk_id"] = hashlib.sha1(
+                f"{doc_id}|{page}|{index}|{content_hash}".encode("utf-8")
+            ).hexdigest()
+
         logger.info(
             f"[DocumentLoader] 文档切分完成: "
             f"{len(documents)} 个文档 -> {len(chunks)} 个chunks"
@@ -187,3 +211,15 @@ class DocumentLoader:
             f"{directory}, 共 {len(all_chunks)} 个chunks"
         )
         return all_chunks
+
+    @staticmethod
+    def _calculate_file_hash(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as file_obj:
+            for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _build_doc_id(path: Path) -> str:
+        return hashlib.sha1(str(path.resolve()).encode("utf-8")).hexdigest()

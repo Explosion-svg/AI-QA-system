@@ -5,13 +5,16 @@ upload_service.py —— 文件上传业务服务
 """
 
 import logging
-from typing import List
+import hashlib
+from typing import List, Tuple
 from pathlib import Path
+import re
 
 from fastapi import UploadFile
 
 from src.rag.rag_engine import RAGEngine
 from src.index.document_loader import DocumentLoader
+from src.infra.config import KNOWLEDGE_DIR, MAX_UPLOAD_FILE_SIZE_MB, UPLOAD_CHUNK_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ class UploadService:
         """
         self.rag_engine = rag_engine
         self.document_loader = document_loader
-        self.storage_dir = Path("knowledge_base")
+        self.storage_dir = Path(KNOWLEDGE_DIR)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info("[UploadService] 初始化完成")
@@ -57,7 +60,7 @@ class UploadService:
             "total_chunks": 0
         }
 
-        saved_paths = []
+        saved_paths: List[str] = []
 
         # 1. 保存文件
         for file in files:
@@ -70,20 +73,20 @@ class UploadService:
                     })
                     continue
 
-                # 保存文件
-                file_path = self.storage_dir / file.filename
-                content = await file.read()
-
-                with open(file_path, "wb") as f:
-                    f.write(content)
+                file_path, file_hash = await self._save_upload_file(file)
 
                 saved_paths.append(str(file_path))
                 results["success"].append({
                     "filename": file.filename,
-                    "path": str(file_path)
+                    "path": str(file_path),
+                    "file_hash": file_hash,
                 })
 
-                logger.info(f"[UploadService] 文件已保存: {file.filename}")
+                logger.info(
+                    "[UploadService] 文件已保存 filename=%s path=%s",
+                    file.filename,
+                    file_path,
+                )
 
             except Exception as e:
                 logger.error(f"[UploadService] 保存文件失败 {file.filename}: {e}")
@@ -143,3 +146,39 @@ class UploadService:
         except Exception as e:
             logger.error(f"[UploadService] 清空失败: {e}")
             return False
+
+    async def _save_upload_file(self, file: UploadFile) -> Tuple[Path, str]:
+        if not file.filename:
+            raise ValueError("文件名不能为空")
+
+        safe_name = self._sanitize_filename(file.filename)
+        file_path = self.storage_dir / safe_name
+        digest = hashlib.sha256()
+        total_size = 0
+        max_size = MAX_UPLOAD_FILE_SIZE_MB * 1024 * 1024
+
+        await file.seek(0)
+        try:
+            with file_path.open("wb") as output:
+                while True:
+                    chunk = await file.read(UPLOAD_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    total_size += len(chunk)
+                    if total_size > max_size:
+                        raise ValueError(f"文件超过大小限制 {MAX_UPLOAD_FILE_SIZE_MB}MB")
+                    digest.update(chunk)
+                    output.write(chunk)
+        except Exception:
+            file_path.unlink(missing_ok=True)
+            raise
+        finally:
+            await file.close()
+
+        return file_path, digest.hexdigest()
+
+    @staticmethod
+    def _sanitize_filename(filename: str) -> str:
+        # 安全清洗文件名
+        cleaned = re.sub(r"[^A-Za-z0-9._\-\u4e00-\u9fff]", "_", filename)
+        return cleaned or "upload.bin"

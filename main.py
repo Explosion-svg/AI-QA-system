@@ -90,11 +90,14 @@ async def root():
 async def health_check():
     """健康检查"""
     container = get_container()
-    rag_ready = container.rag_engine().is_ready()
+    rag_engine = container.rag_engine()
+    rag_ready = rag_engine.is_ready()
+    sources = rag_engine.list_sources() if rag_ready else []
 
     return {
         "status": "healthy",
-        "rag_ready": rag_ready
+        "rag_ready": rag_ready,
+        "source_count": len(sources),
     }
 
 

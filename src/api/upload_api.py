@@ -50,6 +50,7 @@ def get_upload_service() -> UploadService:
 # API端点
 # ============================================================
 
+@router.post("", response_model=UploadResponse, include_in_schema=False)
 @router.post("/", response_model=UploadResponse)
 async def upload_files(
     files: List[UploadFile] = File(...),
