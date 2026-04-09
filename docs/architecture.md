@@ -1,43 +1,165 @@
-# 项目重构说明
+# RAG系统架构文档
 
-## 新的目录结构
+## 目录结构
 
 ```
-src/
-├── api/                    # API 层
-│   ├── __init__.py
-│   └── schemas.py         # Pydantic 数据模型
+project3/
 │
-├── services/              # 业务逻辑层
-│   ├── __init__.py
-│   ├── chat_service.py    # 对话服务
-│   ├── session_service.py # 会话管理服务
-│   └── upload_service.py  # 文档上传服务
+├── main.py                     # FastAPI启动入口
 │
-├── core/                  # 核心功能层
-│   ├── __init__.py
-│   ├── llm_client.py      # LLM 客户端
-│   ├── rag_engine.py      # RAG 引擎
-│   ├── parser.py          # 文档解析器
-│   └── storage.py         # 文件存储管理器
+├── src/
+│   │
+│   ├── api/                    # API层（HTTP接口）
+│   │   ├── __init__.py
+│   │   ├── chat_api.py         # 聊天接口
+│   │   ├── upload_api.py       # 上传接口
+│   │   └── schemas.py          # 数据模型
+│   │
+│   ├── services/               # 业务层
+│   │   ├── __init__.py
+│   │   ├── chat_service.py     # 聊天业务编排
+│   │   └── upload_service.py   # 上传业务编排
+│   │
+│   ├── rag/                    # RAG能力层
+│   │   ├── __init__.py
+│   │   ├── rag_engine.py       # RAG流程编排
+│   │   ├── rewrite.py          # 查询改写
+│   │   ├── retriever.py        # 混合检索
+│   │   ├── rerank.py           # 重排序
+│   │   ├── context_filter.py   # 上下文过滤
+│   │   └── prompt_builder.py   # Prompt构建
+│   │
+│   ├── index/                  # 向量索引层
+│   │   ├── __init__.py
+│   │   ├── vector_store.py     # 抽象接口
+│   │   ├── chroma_store.py     # ChromaDB实现
+│   │   └── document_loader.py  # 文档加载器
+│   │
+│   ├── memory/                 # 记忆层
+│   │   ├── __init__.py
+│   │   └── history_manager.py  # 历史管理
+│   │
+│   ├── infra/                  # 基础设施层
+│   │   ├── __init__.py
+│   │   ├── llm_client.py       # LLM客户端
+│   │   ├── embedding_model.py  # Embedding模型
+│   │   ├── config.py           # 配置管理
+│   │   └── logger.py           # 日志管理
+│   │
+│   ├── container.py            # 依赖注入容器
+│   └── cli.py                  # 命令行工具
 │
-├── utils/                 # 工具层
-│   ├── __init__.py
-│   └── history_manager.py # 历史记录管理
-│
-├── config.py              # 全局配置
-└── cli.py                 # CLI 入口
+├── requirements.txt
+├── .env
+└── README.md
 ```
 
-## 分层说明
+## 分层职责
 
-### 1. API 层 - 数据模型定义
-### 2. 服务层 - 业务逻辑封装
-### 3. 核心层 - 底层功能实现
-### 4. 工具层 - 通用工具函数
+### 1. main.py（系统入口）
+- 创建FastAPI应用
+- 初始化容器
+- 注册路由
+- 配置生命周期
 
-## 优势
+### 2. container.py（依赖注入）
+- 创建所有核心对象
+- 管理对象生命周期
+- 连接依赖关系
 
-- 职责清晰，易于维护
-- 模块独立，可单独测试
-- 符合工业标准
+### 3. API层
+- 接收HTTP请求
+- 参数校验
+- 调用Service
+- 返回响应
+
+### 4. Services层
+- 业务流程编排
+- 调用RAG引擎
+- 调用历史管理
+- 不涉及HTTP细节
+
+### 5. RAG层
+- 实现RAG pipeline
+- 查询改写
+- 混合检索
+- 重排序
+- 上下文过滤
+
+### 6. Index层
+- 向量数据库操作
+- 文档加载
+- Chunk切分
+- Embedding
+
+### 7. Memory层
+- 对话历史管理
+- 加载/保存历史
+- 历史截断
+
+### 8. Infra层
+- LLM API调用
+- Embedding模型
+- 配置管理
+- 日志管理
+
+## RAG检索流程
+
+```
+用户查询 (query)
+    ↓
+[Query Rewriter] 查询改写
+    ↓
+[Hybrid Retriever] 混合检索
+    ├─→ BM25检索（关键词匹配）
+    └─→ 向量检索（语义匹配）
+    ↓
+[RRF Fusion] 融合两路结果
+    ↓
+[Reranker] CrossEncoder重排序
+    ↓
+[Context Filter] 上下文过滤
+    ↓
+返回最终上下文 → LLM生成
+```
+
+## 核心设计原则
+
+1. **分层隔离**：各层职责单一，互不穿透
+2. **依赖注入**：通过Container管理对象创建
+3. **接口抽象**：VectorStore等使用抽象接口
+4. **生命周期管理**：统一的startup/shutdown
+5. **配置集中**：所有配置在infra/config.py
+
+## 启动方式
+
+### 1. Web API
+```bash
+python3 main.py
+```
+
+### 2. 命令行
+```bash
+python3 -m src.cli chat
+```
+
+## 环境变量
+
+在`.env`文件中配置：
+
+```env
+# LLM配置
+OPENAI_API_KEY=your-key
+DEEPSEEK_API_KEY=your-key
+DEFAULT_PROVIDER=openai
+DEFAULT_MODEL=gpt-3.5-turbo
+
+# RAG配置
+CHUNK_SIZE=500
+CHUNK_OVERLAP=50
+RAG_TOP_K=4
+
+# 路径配置
+KNOWLEDGE_DIR=knowledge_base
+CHAT_SAVE_DIR=chat_history
+```

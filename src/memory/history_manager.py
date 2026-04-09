@@ -25,7 +25,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from typing import List, Dict
-from src.config import CHAT_SAVE_DIR, MAX_HISTORY
+from src.infra.config import CHAT_SAVE_DIR, MAX_HISTORY
 
 
 class HistoryManager:
