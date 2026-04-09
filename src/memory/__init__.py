@@ -5,5 +5,6 @@ memory —— 记忆层
 """
 
 from .history_manager import HistoryManager
+from .memory_manager import MemoryManager
 
-__all__ = ["HistoryManager"]
+__all__ = ["HistoryManager", "MemoryManager"]

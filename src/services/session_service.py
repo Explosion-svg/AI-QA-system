@@ -7,7 +7,7 @@ session_service.py —— 会话管理服务
 import logging
 from typing import List, Dict
 
-from src.utils.history_manager import HistoryManager
+from src.memory.history_manager import HistoryManager
 
 logger = logging.getLogger(__name__)
 

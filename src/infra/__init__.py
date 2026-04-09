@@ -1,12 +1,7 @@
 """
 infra —— 基础设施层
 ====================
-职责：封装所有外部系统接口
+保持包初始化轻量，避免导入配置时拉起可选依赖。
 """
 
-from .llm_client import LLMClient
-from .embedding_model import EmbeddingModel
-from .config import Config
-from .logger import setup_logger
-
-__all__ = ["LLMClient", "EmbeddingModel", "Config", "setup_logger"]
+__all__ = []

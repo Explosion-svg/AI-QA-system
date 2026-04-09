@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.config import PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL, MAX_HISTORY
-from src.utils.history_manager import HistoryManager
+from src.memory.history_manager import HistoryManager
 
 # API 服务地址
 API_BASE = "http://127.0.0.1:8000"
@@ -70,7 +70,7 @@ st.markdown("""
 def api_chat(message: str, history: list, use_rag: bool,
              provider: str, model: str, system_prompt: str,
              temperature: float, max_tokens: int) -> tuple[str, list]:
-    """调用 POST /chat，返回 (answer, sources)"""
+    """调用 POST /chat/，返回 (answer, sources)"""
     payload = {
         "message": message,
         "history": history,
@@ -81,28 +81,28 @@ def api_chat(message: str, history: list, use_rag: bool,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    resp = httpx.post(f"{API_BASE}/chat", json=payload, timeout=120)
+    resp = httpx.post(f"{API_BASE}/chat/", json=payload, timeout=120)
     resp.raise_for_status()     # 检查请求是否成功
     data = resp.json()
     return data["answer"], data.get("sources", [])
 
 
 def api_upload_files(files) -> dict:
-    """调用 POST /knowledge-base/upload，返回响应 dict"""
+    """调用 POST /upload，返回响应 dict"""
     # python上传多文件，专门给requests库使用
     files_payload = [
         ("files", (f.name, f.read(), "application/octet-stream"))
         for f in files
     ]
-    resp = httpx.post(f"{API_BASE}/knowledge-base/upload", files=files_payload, timeout=300)
+    resp = httpx.post(f"{API_BASE}/upload/", files=files_payload, timeout=300)
     resp.raise_for_status()
     return resp.json()
 
 
 def api_kb_status() -> dict:
-    """调用 GET /knowledge-base/status，返回状态 dict"""
+    """调用 GET /chat/status，返回状态 dict"""
     try:
-        resp = httpx.get(f"{API_BASE}/knowledge-base/status", timeout=10)
+        resp = httpx.get(f"{API_BASE}/chat/status", timeout=10)
         resp.raise_for_status()
         return resp.json()
     except Exception:
@@ -110,10 +110,10 @@ def api_kb_status() -> dict:
 
 
 def api_clear_kb() -> bool:
-    """调用 DELETE /knowledge-base/clear，返回是否成功"""
-    resp = httpx.delete(f"{API_BASE}/knowledge-base/clear", timeout=30)
+    """调用 DELETE /upload/clear，返回是否成功"""
+    resp = httpx.delete(f"{API_BASE}/upload/clear", timeout=30)
     resp.raise_for_status()
-    return resp.json().get("success", False)
+    return True
 
 
 def api_health() -> bool:

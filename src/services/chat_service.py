@@ -5,11 +5,14 @@ chat_service.py —— 对话业务服务
 """
 
 import logging
+from time import perf_counter
 from typing import List, Tuple, Optional
 
 from src.rag.rag_engine import RAGEngine
 from src.memory.history_manager import HistoryManager
+from src.memory.memory_manager import MemoryManager
 from src.infra.llm_client import LLMClient
+from src.infra.config import DEFAULT_MODEL, DEFAULT_PROVIDER
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +27,7 @@ class ChatService:
         self,
         rag_engine: RAGEngine,
         history_manager: HistoryManager,
-        llm_client: LLMClient
+        memory_manager: MemoryManager,
     ):
         """
         初始化聊天服务
@@ -32,11 +35,10 @@ class ChatService:
         Args:
             rag_engine: RAG引擎
             history_manager: 历史管理器
-            llm_client: LLM客户端
         """
         self.rag_engine = rag_engine
         self.history_manager = history_manager
-        self.llm_client = llm_client
+        self.memory_manager = memory_manager
 
         logger.info("[ChatService] 初始化完成")
 
@@ -65,53 +67,81 @@ class ChatService:
         Returns:
             (回答, 来源列表)
         """
-        logger.info(f"[ChatService] 处理聊天: {message[:50]}...")
+        total_start = perf_counter()
+        logger.info("[ChatService] 处理聊天 message=%s", message[:80])
 
         # 1. 加载历史
-        history = []
-        if session_id:
-            history = self.history_manager.load(session_id)
-            logger.info(f"[ChatService] 加载历史: {len(history)} 条")
+        history_start = perf_counter()
+        # 新增：优先从结构化记忆中构造上下文，不再依赖简单尾部裁剪。
+        history = self.memory_manager.build_context_messages(session_id)
+        logger.info(
+            "[ChatService] 历史加载完成 session_id=%s messages=%d cost=%.3fs",
+            session_id,
+            len(history),
+            perf_counter() - history_start,
+        )
 
         # 2. RAG检索
+        rag_start = perf_counter()
         rag_context = ""
         sources = []
         if use_rag and self.rag_engine.is_ready():
             try:
                 rag_context, sources = self.rag_engine.get_context_with_sources(message)
-                logger.info(f"[ChatService] RAG检索完成: {len(sources)} 个来源")
+                logger.info(
+                    "[ChatService] RAG检索完成 sources=%d context_chars=%d cost=%.3fs",
+                    len(sources),
+                    len(rag_context),
+                    perf_counter() - rag_start,
+                )
             except Exception as e:
                 logger.error(f"[ChatService] RAG检索失败: {e}")
+        else:
+            logger.info(
+                "[ChatService] 跳过RAG use_rag=%s rag_ready=%s",
+                use_rag,
+                self.rag_engine.is_ready(),
+            )
 
-        # 3. 切换模型（如果指定）
-        if provider and model:
-            self.llm_client.switch(provider, model)
+        llm_client = LLMClient(
+            provider=provider or DEFAULT_PROVIDER,
+            model=model or DEFAULT_MODEL,
+        )
 
         # 4. 调用LLM
         try:
-            answer = self.llm_client.chat(
+            llm_start = perf_counter()
+            answer = llm_client.chat(
                 user_message=message,
                 history=history,
                 rag_context=rag_context,
                 temperature=temperature,
                 max_tokens=max_tokens
             )
-            logger.info("[ChatService] LLM调用成功")
+            logger.info(
+                "[ChatService] LLM调用成功 provider=%s model=%s cost=%.3fs",
+                llm_client.provider,
+                llm_client.model,
+                perf_counter() - llm_start,
+            )
         except Exception as e:
             logger.error(f"[ChatService] LLM调用失败: {e}", exc_info=True)
             raise
 
         # 5. 保存历史
         if session_id:
-            # 加载现有历史
-            existing_history = self.history_manager.load(session_id)
-            # 添加新的对话
-            existing_history.append({"role": "user", "content": message})
-            existing_history.append({"role": "assistant", "content": answer})
-            # 保存更新后的历史
-            self.history_manager.save(session_id, existing_history)
+            # 新增：由 MemoryManager 统一处理“追加 + 压缩 + 持久化”。
+            self.memory_manager.append_turn(
+                session_id=session_id,
+                user=message,
+                assistant=answer,
+                provider=llm_client.provider,
+                model=llm_client.model,
+                meta={"provider": llm_client.provider, "model": llm_client.model},
+            )
             logger.info("[ChatService] 历史已保存")
 
+        logger.info("[ChatService] 请求完成 total_cost=%.3fs", perf_counter() - total_start)
         return answer, sources
 
     def get_knowledge_base_status(self) -> dict:

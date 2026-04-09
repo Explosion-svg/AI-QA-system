@@ -1,20 +1,9 @@
 """
-一种检索策略
-query_rewriter.py —— 查询改写模块
-====================================
-职责：将用户原始问题改写成多个检索友好的查询，提升召回率。
-
-策略：
-  1. 原始查询保留
-  2. 关键词提取（去停用词）
-  3. 同义词扩展（可选，需要词典）
-  4. 多角度改写（可选，需要 LLM）
-
-工程级设计：
-  - 可插拔：每个策略独立，可按需启用
-  - 可配置：通过参数控制改写强度
-  - 轻量化：默认只做关键词提取，不依赖外部 LLM
+rewrite.py —— 查询改写模块
+===========================
 """
+
+from __future__ import annotations
 
 import logging
 import re
@@ -22,70 +11,98 @@ from typing import List
 
 logger = logging.getLogger(__name__)
 
-# 中文停用词（简化版，生产环境建议从文件加载）
 STOPWORDS = {
     "的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一", "一个",
     "上", "也", "很", "到", "说", "要", "去", "你", "会", "着", "没有", "看", "好",
     "自己", "这", "那", "里", "什么", "怎么", "为什么", "哪里", "如何", "吗", "呢",
+    "请问", "一下", "关于",
 }
+# 切分中文词和英文词
+CHINESE_TOKEN_RE = re.compile(r"[\u4e00-\u9fff]+")
+LATIN_TOKEN_RE = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_./:-]*")
 
 
 class QueryRewriter:
-    """
-    查询改写器：生成多个检索友好的查询变体。
+    """生成更适合检索的 query 变体。"""
 
-    使用示例：
-        rewriter = QueryRewriter()
-        queries = rewriter.rewrite("如何使用 RAG 提升问答准确率？")
-        # 返回: ["如何使用 RAG 提升问答准确率？", "RAG 提升 问答 准确率", ...]
-    """
-
-    def __init__(self, enable_keyword_extract: bool = True, enable_synonym: bool = False):
-        """
-        :param enable_keyword_extract: 是否启用关键词提取
-        :param enable_synonym: 是否启用同义词扩展（需要词典，暂未实现）
-        """
+    def __init__(self, enable_keyword_extract: bool = True):
         self.enable_keyword_extract = enable_keyword_extract
-        self.enable_synonym = enable_synonym
 
     def rewrite(self, query: str) -> List[str]:
-        """
-        改写查询，返回多个变体。
-
-        :param query: 原始查询
-        :return: 查询列表，第一个永远是原始查询
-        """
-        queries = [query]  # 原始查询保留
+        normalized = self._normalize_query(query)
+        queries: List[str] = [normalized]
 
         if self.enable_keyword_extract:
-            keywords = self._extract_keywords(query)
-            if keywords and keywords != query:
-                queries.append(keywords)
+            keyword_query = self._extract_keywords(normalized)
+            if keyword_query and keyword_query != normalized:
+                queries.append(keyword_query)
 
-        logger.debug("[QueryRewriter] 原始查询: %s", query)
-        logger.debug("[QueryRewriter] 改写后: %s", queries)
-        return queries
+        unique_queries = []
+        seen = set()
+        for item in queries:
+            key = item.strip()
+            if key and key not in seen:
+                seen.add(key)
+                unique_queries.append(key)
 
-    def _extract_keywords(self, text: str) -> str:
-        """
-        提取关键词：去除停用词、标点，保留核心词汇。
+        logger.debug("[QueryRewriter] 原始查询=%s 改写结果=%s", query, unique_queries)
+        return unique_queries
 
-        简化实现：分词 + 停用词过滤。
-        生产环境建议用 jieba 分词 + 自定义词典。
-        """
-        # 去除标点符号
-        text = re.sub(r"[^\w\s]", " ", text)
-        # 简单按空格分词（中文会按字分，英文按词分）
-        words = text.split()
-        # 过滤停用词和单字符
-        keywords = [w for w in words if w not in STOPWORDS and len(w) > 1]
-        return " ".join(keywords) if keywords else text
+    def tokenize(self, text: str) -> List[str]:
+        tokens: List[str] = []
+        lowered = text.lower()
 
+        for token in LATIN_TOKEN_RE.findall(lowered):
+            if token not in STOPWORDS:
+                tokens.append(token)
 
-if __name__ == "__main__":
-    # 测试
-    rewriter = QueryRewriter()
-    result = rewriter.rewrite("如何使用 RAG 提升问答的准确率？")
-    print("改写结果:")
-    for i, q in enumerate(result, 1):
-        print(f"  {i}. {q}")
+        for block in CHINESE_TOKEN_RE.findall(lowered):
+            if block in STOPWORDS:
+                continue
+
+            chars = [char for char in block if char.strip()]
+            # 单字
+            tokens.extend(chars)
+            # 双字
+            tokens.extend(
+                block[index:index + 2]
+                for index in range(len(block) - 1)
+            )
+            # 全部
+            if len(block) >= 3:
+                tokens.append(block)
+
+        return [token for token in tokens if token and token not in STOPWORDS]
+
+    def _extract_keywords(self, query: str) -> str:
+        keywords: List[str] = []
+        lowered = query.lower()
+
+        for token in LATIN_TOKEN_RE.findall(lowered):
+            if token not in STOPWORDS:
+                keywords.append(token)
+
+        for block in CHINESE_TOKEN_RE.findall(lowered):
+            cleaned = block
+            for stopword in sorted(STOPWORDS, key=len, reverse=True):
+                cleaned = cleaned.replace(stopword, " ")
+            parts = [part.strip() for part in cleaned.split() if len(part.strip()) >= 2]
+            if parts:
+                keywords.extend(parts)
+            elif len(block) >= 2:
+                keywords.append(block)
+
+        # 去重
+        unique_keywords = []
+        seen = set()
+        for keyword in keywords:
+            if keyword not in seen:
+                seen.add(keyword)
+                unique_keywords.append(keyword)
+
+        return " ".join(unique_keywords[:8])
+
+    @staticmethod
+    def _normalize_query(query: str) -> str:
+        query = re.sub(r"\s+", " ", query).strip()
+        return query

@@ -5,11 +5,11 @@
 ## 特性
 
 - 🏗️ **企业级架构**：清晰的分层设计，职责分离
-- 🔍 **混合检索**：BM25 + 向量检索 + 重排序
+- 🔍 **混合检索**： 向量检索 + 重排序
 - 🚀 **高性能**：依赖注入、生命周期管理
 - 📚 **多格式支持**：PDF、DOCX、TXT
 - 🔌 **多模型支持**：OpenAI、DeepSeek、Qwen、Ollama
-- 💾 **对话记忆**：会话历史管理
+- 💾 **对话记忆**：会话历史管理，超长上下文自动压缩
 
 ## 快速开始
 
@@ -48,6 +48,7 @@ python3 -m src.cli chat
 ```
 project3/
 ├── main.py                 # FastAPI入口
+├── app.py  				# streamlit入口
 ├── src/
 │   ├── api/               # HTTP接口层
 │   ├── services/          # 业务逻辑层
@@ -89,7 +90,6 @@ curl -X POST "http://localhost:8000/chat/" \
 - ChromaDB - 向量数据库
 - LangChain - 文档处理
 - sentence-transformers - Embedding和Reranker
-- rank-bm25 - BM25检索
 
 ## License
 

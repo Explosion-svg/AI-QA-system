@@ -15,7 +15,6 @@ from typing import Generator, List, Dict
 
 logger = logging.getLogger(__name__)
 
-from openai import OpenAI   # 所有服务商都用这一个库来调用
 from src.infra.config import PROVIDERS, get_api_key, get_base_url
 
 
@@ -35,11 +34,13 @@ class LLMClient:
         self.model = model
         self._client = self._build_client()   # 创建底层 HTTP 客户端
 
-    def _build_client(self) -> OpenAI:
+    def _build_client(self):
         """
         根据当前 provider 构建 OpenAI 客户端实例。
         切换 base_url 是关键：不同服务商的地址不同，但接口格式一样。
         """
+        from openai import OpenAI
+
         api_key = get_api_key(self.provider) or "ollama"  # Ollama 不验证 Key
         base_url = get_base_url(self.provider)
         logger.info(f"构建 LLM 客户端: provider={self.provider}, base_url={base_url}")
@@ -118,7 +119,11 @@ class LLMClient:
         final_user = user_message
         if rag_context:
             final_user = (
-                f"请根据以下参考资料回答问题，如资料不足可结合自身知识。\n\n"
+                "请严格基于以下参考资料回答问题。\n"
+                "要求：\n"
+                "1. 优先依据参考资料作答，不要编造资料中不存在的信息。\n"
+                "2. 如果参考资料不足以支持结论，请明确回答“根据当前知识库无法确定”。\n"
+                "3. 回答中尽量保留对应来源名称。\n\n"
                 f"参考资料:\n{rag_context}\n\n"
                 f"问题: {user_message}"
             )

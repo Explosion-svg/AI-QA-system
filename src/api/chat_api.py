@@ -62,6 +62,7 @@ def get_chat_service() -> ChatService:
 # API端点
 # ============================================================
 
+@router.post("", response_model=ChatResponse, include_in_schema=False)
 @router.post("/", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,

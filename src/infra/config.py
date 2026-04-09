@@ -7,8 +7,12 @@ config.py —— 全局配置中心
 """
 
 import os
-from dotenv import load_dotenv
-from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - 兼容最小运行环境
+    def load_dotenv(*args, **kwargs):
+        return False
 
 # 加载 .env 文件中的环境变量（API Key 等敏感信息放在那里，不写死在代码里）
 load_dotenv()
@@ -55,27 +59,55 @@ PROVIDERS = {
 # 应用默认值（可通过 .env 覆盖）
 # ============================================================
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "openai")   # 默认服务商
-DEFAULT_MODEL    = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo")  # 默认模型
-MAX_HISTORY      = int(os.getenv("MAX_HISTORY", "20"))        # 最多保留多少轮对话历史
-CHAT_SAVE_DIR    = os.getenv("CHAT_SAVE_DIR", "chat_history") # 聊天记录保存目录
-KNOWLEDGE_DIR    = os.getenv("KNOWLEDGE_DIR", "knowledge_base")  # 知识库文档目录
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo")  # 默认模型
+MAX_HISTORY = int(os.getenv("MAX_HISTORY", "20"))            # 最多保留多少轮对话历史
+CHAT_SAVE_DIR = os.getenv("CHAT_SAVE_DIR", "chat_history")   # 聊天记录保存目录
+KNOWLEDGE_DIR = os.getenv("KNOWLEDGE_DIR", "knowledge_base") # 知识库文档目录
+VECTOR_DB_DIR = os.getenv("VECTOR_DB_DIR", "vector_db")
+VECTOR_COLLECTION_NAME = os.getenv("VECTOR_COLLECTION_NAME", "knowledge_chunks")
+VECTOR_UPSERT_BATCH_SIZE = int(os.getenv("VECTOR_UPSERT_BATCH_SIZE", "64"))
+
+# ============================================================
+# 新增：会话记忆压缩配置
+# 说明：
+# - 短期窗口过长时，压缩 recent_messages 的前半段到 rolling_summary
+# - 整个会话摘要过长时，再提炼成 session_summary
+# ============================================================
+MEMORY_RECENT_MAX_CHARS = int(os.getenv("MEMORY_RECENT_MAX_CHARS", "6000"))
+MEMORY_ROLLING_MAX_CHARS = int(os.getenv("MEMORY_ROLLING_MAX_CHARS", "4000"))
+MEMORY_SUMMARY_MAX_CHARS = int(os.getenv("MEMORY_SUMMARY_MAX_CHARS", "2500"))
 
 # ============================================================
 # RAG（检索增强生成）相关配置
 # RAG 原理：把你的文档切成小块 -> 转成向量 -> 用户提问时找最相关的块 -> 喂给 AI
 # ============================================================
-EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDING_MODEL = os.getenv(
+    "EMBEDDING_MODEL",
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+)
 # 上面这个模型：多语言、支持中文、体积小（~120MB）、首次运行自动下载
 
-CHUNK_SIZE    = 500   # 每个文档块的最大字符数（太大检索不精准，太小上下文不足）
-CHUNK_OVERLAP = 50    # 相邻块之间的重叠字符数（保证切割处语义不断裂）
-RAG_TOP_K     = 4     # 每次检索返回最相关的前 K 个文档块
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))                 # 每个文档块的最大字符数
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "80"))            # 相邻块之间的重叠字符数
+RAG_DENSE_TOP_K = int(os.getenv("RAG_DENSE_TOP_K", "24"))
+RAG_SPARSE_TOP_K = int(os.getenv("RAG_SPARSE_TOP_K", "24"))
+RAG_FUSION_TOP_K = int(os.getenv("RAG_FUSION_TOP_K", "24"))
+RAG_RERANK_TOP_K = int(os.getenv("RAG_RERANK_TOP_K", "8"))
+RAG_CONTEXT_TOP_K = int(os.getenv("RAG_CONTEXT_TOP_K", "4"))
+RRF_K = int(os.getenv("RRF_K", "60"))
+RAG_MIN_CHUNK_LENGTH = int(os.getenv("RAG_MIN_CHUNK_LENGTH", "80"))
+RAG_MAX_CONTEXT_LENGTH = int(os.getenv("RAG_MAX_CONTEXT_LENGTH", "4200"))
+
+# 兼容旧配置名
+RAG_TOP_K = RAG_CONTEXT_TOP_K
+
+# 上传配置
+UPLOAD_CHUNK_SIZE = int(os.getenv("UPLOAD_CHUNK_SIZE", str(1024 * 1024)))
+MAX_UPLOAD_FILE_SIZE_MB = int(os.getenv("MAX_UPLOAD_FILE_SIZE_MB", "50"))
 
 # ============================================================
 # 模型下载路径、加速
 # ============================================================
-# if os.getenv("HF_HOME"):
-#     os.environ["HF_HOME"] = os.getenv("HF_HOME")
 if os.getenv("HF_ENDPOINT"):
     os.environ["HF_ENDPOINT"] = os.getenv("HF_ENDPOINT")
 
@@ -106,37 +138,3 @@ def get_base_url(provider: str) -> str:
 def list_providers() -> list:
     """返回所有支持的提供商代号列表，例如 ['openai', 'deepseek', 'qwen', 'ollama']。"""
     return list(PROVIDERS.keys())
-
-# import logging
-# from logging.handlers import RotatingFileHandler
-#
-# def setup_logging(level: str = 'INFO'):
-#     # 确保日志目录存在
-#     log_dir = Path("logs")
-#     log_dir.mkdir(exist_ok=True)
-#     log_file = log_dir / "app.log"
-#
-#     # 日志格式
-#     log_format = "%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s"
-#     date_format = "%Y-%m-%d %H:%M:%S"
-#
-#     # 1. 终端处理器（输出到屏幕）
-#     console_handler = logging.StreamHandler()
-#     console_handler.setFormatter(logging.Formatter(log_format, datefmt="%H:%M:%S"))
-#
-#     # 2. 轮转文件处理器（输出到文件，10MB 轮转一次，保留 5 个旧文件）
-#     file_handler = RotatingFileHandler(
-#         log_file,
-#         maxBytes=10 * 1024 * 1024,  # 10MB
-#         backupCount=5,
-#         encoding="utf-8"
-#     )
-#     file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
-#
-#     # 全局配置
-#     logging.basicConfig(
-#         level=getattr(logging, level.upper(), logging.INFO),
-#         handlers=[console_handler, file_handler]
-#     )
-
-

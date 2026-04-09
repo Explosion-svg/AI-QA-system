@@ -9,11 +9,13 @@ from .rewrite import QueryRewriter
 from .retriever import Retriever
 from .rerank import Reranker
 from .context_filter import ContextFilter
+from .types import RetrievedChunk
 
 __all__ = [
     "RAGEngine",
     "QueryRewriter",
     "Retriever",
     "Reranker",
-    "ContextFilter"
+    "ContextFilter",
+    "RetrievedChunk",
 ]
