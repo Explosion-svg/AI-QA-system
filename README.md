@@ -38,7 +38,7 @@ DEFAULT_MODEL=gpt-3.5-turbo
 python3 main.py
 
 # 命令行
-python3 -m src.cli chat
+streamlit run app.py
 ```
 
 ### 4. 访问API文档
