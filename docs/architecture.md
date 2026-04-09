@@ -164,4 +164,3 @@ KNOWLEDGE_DIR=knowledge_base
 CHAT_SAVE_DIR=chat_history
 ```
 
-
