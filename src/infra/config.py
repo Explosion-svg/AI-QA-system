@@ -106,6 +106,21 @@ UPLOAD_CHUNK_SIZE = int(os.getenv("UPLOAD_CHUNK_SIZE", str(1024 * 1024)))
 MAX_UPLOAD_FILE_SIZE_MB = int(os.getenv("MAX_UPLOAD_FILE_SIZE_MB", "50"))
 
 # ============================================================
+# API 安全配置
+# ============================================================
+# API 鉴权 Token（为空 = 不启用，本地开发用；公网部署务必设置）
+API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "")
+# CORS 白名单，逗号分隔
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:8501").split(",")
+    if origin.strip()
+]
+
+# 重排序模型（中英文均支持；追求质量可换 BAAI/bge-reranker-v2-m3，约 2.2GB）
+RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base")
+
+# ============================================================
 # 模型下载路径、加速
 # ============================================================
 if os.getenv("HF_ENDPOINT"):

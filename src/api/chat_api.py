@@ -19,7 +19,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 # ============================================================
-# 请求/响应模型，schemas
+# 请求/响应模型
 # ============================================================
 
 class ChatRequest(BaseModel):
@@ -29,6 +29,7 @@ class ChatRequest(BaseModel):
     use_rag: bool = Field(True, description="是否使用RAG")
     provider: Optional[str] = Field(None, description="LLM提供商")
     model: Optional[str] = Field(None, description="模型名称")
+    system_prompt: Optional[str] = Field(None, description="自定义系统提示词")
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="温度参数")
     max_tokens: int = Field(2048, ge=1, le=8192, description="最大token数")
 
@@ -88,6 +89,7 @@ async def chat(
             use_rag=request.use_rag,
             provider=request.provider,
             model=request.model,
+            system_prompt=request.system_prompt,
             temperature=request.temperature,
             max_tokens=request.max_tokens
         )
@@ -100,7 +102,7 @@ async def chat(
 
     except Exception as e:
         logger.error(f"[ChatAPI] 聊天失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"聊天失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="聊天失败，请稍后重试")
 
 
 @router.get("/status", response_model=KnowledgeBaseStatus)
@@ -121,8 +123,8 @@ async def get_knowledge_base_status(
         return KnowledgeBaseStatus(**status)
 
     except Exception as e:
-        logger.error(f"[ChatAPI] 获取状态失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取状态失败: {str(e)}")
+        logger.error(f"[ChatAPI] 获取状态失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取状态失败，请稍后重试")
 
 
 @router.get("/history/{session_id}")
@@ -145,8 +147,8 @@ async def get_history(
         return {"session_id": session_id, "history": history}
 
     except Exception as e:
-        logger.error(f"[ChatAPI] 获取历史失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取历史失败: {str(e)}")
+        logger.error(f"[ChatAPI] 获取历史失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取历史失败，请稍后重试")
 
 
 @router.delete("/history/{session_id}")
@@ -169,5 +171,5 @@ async def clear_history(
         return {"message": "历史已清空", "session_id": session_id}
 
     except Exception as e:
-        logger.error(f"[ChatAPI] 清空历史失败: {e}")
-        raise HTTPException(status_code=500, detail=f"清空历史失败: {str(e)}")
+        logger.error(f"[ChatAPI] 清空历史失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="清空历史失败，请稍后重试")

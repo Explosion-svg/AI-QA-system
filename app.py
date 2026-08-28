@@ -12,6 +12,9 @@ app.py —— Streamlit 前端界面
   右侧主区域                —— 聊天气泡、输入框
 """
 
+import html
+import os
+
 import streamlit as st
 import httpx
 from dotenv import load_dotenv
@@ -21,8 +24,12 @@ load_dotenv()
 from src.config import PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODEL, MAX_HISTORY
 from src.memory.history_manager import HistoryManager
 
-# API 服务地址
-API_BASE = "http://127.0.0.1:8000"
+# API 服务地址（可通过环境变量覆盖，Docker 部署时指向 api 容器）
+API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000")
+
+# API 鉴权 Token（与 .env 的 API_AUTH_TOKEN 保持一致）
+API_TOKEN = os.getenv("API_AUTH_TOKEN", "")
+HEADERS = {"X-API-Token": API_TOKEN} if API_TOKEN else {}
 
 # ==============================================================
 # 页面基础配置
@@ -67,21 +74,22 @@ st.markdown("""
 # API 调用封装
 # ==============================================================
 
-def api_chat(message: str, history: list, use_rag: bool,
+def api_chat(message: str, session_id: str, use_rag: bool,
              provider: str, model: str, system_prompt: str,
              temperature: float, max_tokens: int) -> tuple[str, list]:
     """调用 POST /chat/，返回 (answer, sources)"""
     payload = {
         "message": message,
-        "history": history,
+        "session_id": session_id,        # 服务端据此加载/保存会话记忆
         "use_rag": use_rag,
         "provider": provider,
         "model": model,
         "system_prompt": system_prompt,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        # 不传 history：历史由服务端 session_id 提供，避免双重记忆
     }
-    resp = httpx.post(f"{API_BASE}/chat/", json=payload, timeout=120)
+    resp = httpx.post(f"{API_BASE}/chat/", json=payload, headers=HEADERS, timeout=120)
     resp.raise_for_status()     # 检查请求是否成功
     data = resp.json()
     return data["answer"], data.get("sources", [])
@@ -94,7 +102,7 @@ def api_upload_files(files) -> dict:
         ("files", (f.name, f.read(), "application/octet-stream"))
         for f in files
     ]
-    resp = httpx.post(f"{API_BASE}/upload/", files=files_payload, timeout=300)
+    resp = httpx.post(f"{API_BASE}/upload/", files=files_payload, headers=HEADERS, timeout=300)
     resp.raise_for_status()
     return resp.json()
 
@@ -102,7 +110,7 @@ def api_upload_files(files) -> dict:
 def api_kb_status() -> dict:
     """调用 GET /chat/status，返回状态 dict"""
     try:
-        resp = httpx.get(f"{API_BASE}/chat/status", timeout=10)
+        resp = httpx.get(f"{API_BASE}/chat/status", headers=HEADERS, timeout=10)
         resp.raise_for_status()
         return resp.json()
     except Exception:
@@ -111,15 +119,27 @@ def api_kb_status() -> dict:
 
 def api_clear_kb() -> bool:
     """调用 DELETE /upload/clear，返回是否成功"""
-    resp = httpx.delete(f"{API_BASE}/upload/clear", timeout=30)
+    resp = httpx.delete(f"{API_BASE}/upload/clear", headers=HEADERS, timeout=30)
     resp.raise_for_status()
     return True
+
+
+def api_clear_session(session_id: str) -> None:
+    """调用 DELETE /chat/history/{session_id}，清空服务端会话记忆"""
+    try:
+        httpx.delete(
+            f"{API_BASE}/chat/history/{session_id}",
+            headers=HEADERS,
+            timeout=10,
+        )
+    except Exception:
+        pass   # 服务端不可达时仅清前端
 
 
 def api_health() -> bool:
     """检查 API 服务是否在线"""
     try:
-        resp = httpx.get(f"{API_BASE}/health", timeout=5)
+        resp = httpx.get(f"{API_BASE}/health", headers=HEADERS, timeout=5)
         return resp.status_code == 200
     except Exception:
         return False
@@ -130,6 +150,7 @@ def api_health() -> bool:
 # ==============================================================
 def init_session():
     defaults = {
+        "session_id": HistoryManager.new_session_id(),   # 服务端会话记忆的唯一标识
         "messages": [],
         "provider": DEFAULT_PROVIDER,
         "model": DEFAULT_MODEL,
@@ -248,6 +269,9 @@ with st.sidebar:
     st.subheader("🗂️ 历史会话")
 
     if st.button("清空当前对话"):
+        # 同时清空服务端记忆，并换新会话，避免继续写旧记忆
+        api_clear_session(st.session_state.session_id)
+        st.session_state.session_id = HistoryManager.new_session_id()
         st.session_state.messages = []
         st.session_state.history_mgr.clear()
         st.rerun()
@@ -261,10 +285,14 @@ with st.sidebar:
         )
         if selected_session and st.button("加载会话"):
             loaded_msgs = st.session_state.history_mgr.load(selected_session)
+            # 过滤 system 摘要消息，只展示 user/assistant 气泡
             st.session_state.messages = [
                 {"role": m["role"], "content": m["content"], "sources": m.get("sources", [])}
                 for m in loaded_msgs
+                if m.get("role") in ("user", "assistant")
             ]
+            # 后续对话在该会话上继续
+            st.session_state.session_id = selected_session
             st.rerun()
 
     st.divider()
@@ -291,47 +319,44 @@ col_c.metric("知识库", "开启" if st.session_state.use_rag else "关闭")
 
 st.divider()
 
-# ---- 渲染历史消息 ----
-for msg in st.session_state.messages:
-    role    = msg["role"]
-    content = msg["content"]
-    sources = msg.get("sources", [])
-
+# ---- 聊天气泡渲染（统一转义，防 XSS）----
+def render_message(role: str, content: str, sources: list | None = None) -> None:
+    """渲染聊天气泡。所有动态内容必须 html.escape，防 XSS。"""
     if role == "user":
         st.markdown(
-            f'<div class="chat-user">🧑 <b>你</b><br>{content}</div>',
+            f'<div class="chat-user">🧑 <b>你</b><br>{html.escape(content)}</div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            f'<div class="chat-ai">🤖 <b>AI</b><br>{content}</div>',
+            f'<div class="chat-ai">🤖 <b>AI</b><br>{html.escape(content)}</div>',
             unsafe_allow_html=True,
         )
         if sources:
-            src_html = "<br>".join(f"• {s}" for s in sources)
+            src_html = "<br>".join(f"• {html.escape(s)}" for s in sources)
             st.markdown(
                 f'<div class="source-box">📄 参考来源：<br>{src_html}</div>',
                 unsafe_allow_html=True,
             )
 
+# ---- 渲染历史消息 ----
+for msg in st.session_state.messages:
+    role    = msg["role"]
+    content = msg["content"]
+    sources = msg.get("sources", [])
+    render_message(role, content, sources)
+
 # ---- 用户输入框 ----
 user_input = st.chat_input("请输入您的问题…", disabled=not api_online)
 
 if user_input:
-    st.markdown(
-        f'<div class="chat-user">🧑 <b>你</b><br>{user_input}</div>',
-        unsafe_allow_html=True,
-    )
+    render_message("user", user_input)
 
     with st.spinner("AI 思考中…"):
-        history = [
-            {"role": m["role"], "content": m["content"]}
-            for m in st.session_state.messages
-        ]
         try:
             answer, sources = api_chat(
                 message=user_input,
-                history=history,
+                session_id=st.session_state.session_id,
                 use_rag=st.session_state.use_rag,
                 provider=st.session_state.provider,
                 model=st.session_state.model,
@@ -343,19 +368,9 @@ if user_input:
             answer = f"请求出错: {e}\n\n请检查 API 服务是否正常运行。"
             sources = []
 
-    st.markdown(
-        f'<div class="chat-ai">🤖 <b>AI</b><br>{answer}</div>',
-        unsafe_allow_html=True,
-    )
-    if sources:
-        src_html = "<br>".join(f"• {s}" for s in sources)
-        st.markdown(
-            f'<div class="source-box">📄 参考来源：<br>{src_html}</div>',
-            unsafe_allow_html=True,
-        )
+    render_message("assistant", answer, sources)
 
     st.session_state.messages.append({"role": "user",      "content": user_input, "sources": []})
     st.session_state.messages.append({"role": "assistant", "content": answer,      "sources": sources})
+    # 持久化已由服务端 MemoryManager 完成，前端不再本地双重保存
 
-    st.session_state.history_mgr.add(user_input, answer)
-    st.session_state.history_mgr.save_session(st.session_state.messages)

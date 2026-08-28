@@ -13,7 +13,7 @@ from src.rag.types import RetrievedChunk
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+DEFAULT_RERANK_MODEL = "BAAI/bge-reranker-base"   # 原 cross-encoder/ms-marco-MiniLM-L-6-v2（纯英文，中文无区分度）
 
 
 class Reranker:

@@ -4,6 +4,7 @@ chat_service.py —— 对话业务服务
 职责：编排聊天业务流程（加载历史、调用RAG、保存历史、返回回答）
 """
 
+import asyncio
 import logging
 from time import perf_counter
 from typing import List, Tuple, Optional
@@ -49,6 +50,7 @@ class ChatService:
         use_rag: bool = True,
         provider: Optional[str] = None,
         model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048
     ) -> Tuple[str, List[str]]:
@@ -61,6 +63,7 @@ class ChatService:
             use_rag: 是否使用RAG
             provider: LLM提供商
             model: 模型名称
+            system_prompt: 自定义系统提示词
             temperature: 温度参数
             max_tokens: 最大token数
 
@@ -87,7 +90,10 @@ class ChatService:
         sources = []
         if use_rag and self.rag_engine.is_ready():
             try:
-                rag_context, sources = self.rag_engine.get_context_with_sources(message)
+                # 检索含 embedding + BM25 + CrossEncoder，阻塞，移入线程池
+                rag_context, sources = await asyncio.to_thread(
+                    self.rag_engine.get_context_with_sources, message
+                )
                 logger.info(
                     "[ChatService] RAG检索完成 sources=%d context_chars=%d cost=%.3fs",
                     len(sources),
@@ -111,12 +117,14 @@ class ChatService:
         # 4. 调用LLM
         try:
             llm_start = perf_counter()
-            answer = llm_client.chat(
+            answer = await asyncio.to_thread(
+                llm_client.chat,
                 user_message=message,
                 history=history,
                 rag_context=rag_context,
+                system_prompt=system_prompt or "你是一个智能助手，请用简洁准确的中文回答用户的问题。",
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
             )
             logger.info(
                 "[ChatService] LLM调用成功 provider=%s model=%s cost=%.3fs",
@@ -131,7 +139,9 @@ class ChatService:
         # 5. 保存历史
         if session_id:
             # 新增：由 MemoryManager 统一处理“追加 + 压缩 + 持久化”。
-            self.memory_manager.append_turn(
+            # append_turn 内部含压缩用的 LLM 调用，同样阻塞，移入线程池。
+            await asyncio.to_thread(
+                self.memory_manager.append_turn,
                 session_id=session_id,
                 user=message,
                 assistant=answer,

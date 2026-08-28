@@ -34,10 +34,13 @@ DEFAULT_MODEL=gpt-3.5-turbo
 ### 3. 启动服务
 
 ```bash
-# Web API
+# Web API（后端，端口 8000）
 python3 main.py
 
-# 命令行
+# 命令行问答（可选）
+python3 -m src.cli
+
+# 前端界面（需先启动 Web API，端口 8501）
 streamlit run app.py
 ```
 

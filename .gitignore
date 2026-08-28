@@ -44,6 +44,6 @@ desktop.ini
 
 tools/
 
-# docs文件
+# docs/ 保留跟踪（README 链接 architecture.md，架构文档是项目资产）
 
-docs/
+# .codex 为本地工具文件，取消跟踪（git rm --cached .codex）

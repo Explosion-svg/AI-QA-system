@@ -71,30 +71,21 @@ def _collect_supported_paths(paths: list[str], container) -> list[str]:
     return file_paths
 
 
-@app.command()
-def chat(
-    provider: str = typer.Option(DEFAULT_PROVIDER, "--provider", "-p"),
-    model: str = typer.Option(DEFAULT_MODEL, "--model", "-m"),
-    rag: bool = typer.Option(True, "--rag/--no-rag"),
-    session: Optional[str] = typer.Option(None, "--session", "-s"),
-):
-    """启动交互式命令行问答。"""
-    console.print(
-        Panel(
-            "RAG 知识库问答 CLI\n输入 /help 查看命令",
-            title="AI QA",
-            expand=False,
-        )
-    )
-
+async def _chat_repl(provider: str, model: str, use_rag: bool, session_id: str) -> None:
+    """在单个事件循环内运行交互式问答 REPL。"""
     container = get_container()
-    asyncio.run(container.startup())
+    await container.startup()
     chat_service = container.chat_service()
     rag_engine = container.rag_engine()
     history_manager = container.history_manager()
 
-    session_id = session or HistoryManager.new_session_id()
-    use_rag = rag
+    # 会话级可变状态（/switch /new /rag 命令会更新）
+    state = {
+        "provider": provider,
+        "model": model,
+        "use_rag": use_rag,
+        "session_id": session_id,
+    }
 
     try:
         _show_help()
@@ -113,15 +104,15 @@ def chat(
                     _show_help()
                     continue
                 if command == "/clear":
-                    history_manager.delete(session_id)
+                    history_manager.delete(state["session_id"])
                     console.print("[dim]当前会话历史已清空[/dim]")
                     continue
                 if command == "/new":
-                    session_id = HistoryManager.new_session_id()
-                    console.print(f"[dim]已切换新会话: {session_id}[/dim]")
+                    state["session_id"] = HistoryManager.new_session_id()
+                    console.print(f"[dim]已切换新会话: {state['session_id']}[/dim]")
                     continue
                 if command == "/history":
-                    history = history_manager.load(session_id)
+                    history = history_manager.load(state["session_id"])
                     if not history:
                         console.print("[dim]暂无历史消息[/dim]")
                     else:
@@ -130,8 +121,8 @@ def chat(
                             console.print(f"[cyan]{label}[/cyan]: {message['content'][:120]}")
                     continue
                 if command == "/switch" and len(parts) >= 3:
-                    provider, model = parts[1], parts[2]
-                    console.print(f"[dim]已切换到 {provider} / {model}[/dim]")
+                    state["provider"], state["model"] = parts[1], parts[2]
+                    console.print(f"[dim]已切换到 {state['provider']} / {state['model']}[/dim]")
                     continue
                 if command == "/models":
                     for provider_name, config in PROVIDERS.items():
@@ -143,10 +134,10 @@ def chat(
                 if command == "/status":
                     console.print(
                         Panel(
-                            f"provider: {provider}\n"
-                            f"model: {model}\n"
-                            f"session: {session_id}\n"
-                            f"rag: {'on' if use_rag else 'off'}\n"
+                            f"provider: {state['provider']}\n"
+                            f"model: {state['model']}\n"
+                            f"session: {state['session_id']}\n"
+                            f"rag: {'on' if state['use_rag'] else 'off'}\n"
                             f"rag_ready: {rag_engine.is_ready()}\n"
                             f"sources: {len(rag_engine.list_sources()) if rag_engine.is_ready() else 0}",
                             title="当前状态",
@@ -156,10 +147,10 @@ def chat(
                 if command == "/rag":
                     sub_command = parts[1].lower() if len(parts) > 1 else ""
                     if sub_command == "on":
-                        use_rag = True
+                        state["use_rag"] = True
                         console.print("[green]RAG 已开启[/green]")
                     elif sub_command == "off":
-                        use_rag = False
+                        state["use_rag"] = False
                         console.print("[yellow]RAG 已关闭[/yellow]")
                     elif sub_command in {"build", "add"}:
                         file_paths = _collect_supported_paths(parts[2:], container)
@@ -169,7 +160,7 @@ def chat(
                         if sub_command == "build":
                             rag_engine.clear_index()
                         chunk_count = rag_engine.build_index(file_paths)
-                        use_rag = True
+                        state["use_rag"] = True
                         console.print(f"[green]索引完成，新增 {chunk_count} 个 chunks[/green]")
                     else:
                         console.print("[yellow]用法: /rag on|off|build [路径...]|add <路径...>[/yellow]")
@@ -178,20 +169,38 @@ def chat(
                 console.print("[yellow]未知命令，输入 /help 查看帮助[/yellow]")
                 continue
 
-            answer, sources = asyncio.run(
-                chat_service.chat(
-                    message=user_input,
-                    session_id=session_id,
-                    use_rag=use_rag,
-                    provider=provider,
-                    model=model,
-                )
+            answer, sources = await chat_service.chat(
+                message=user_input,
+                session_id=state["session_id"],
+                use_rag=state["use_rag"],
+                provider=state["provider"],
+                model=state["model"],
             )
             console.print(f"[bold blue]AI[/bold blue]: {answer}")
             if sources:
                 console.print("[dim]来源: " + "、".join(sources) + "[/dim]")
     finally:
-        asyncio.run(container.shutdown())
+        await container.shutdown()
+
+
+@app.command()
+def chat(
+    provider: str = typer.Option(DEFAULT_PROVIDER, "--provider", "-p"),
+    model: str = typer.Option(DEFAULT_MODEL, "--model", "-m"),
+    rag: bool = typer.Option(True, "--rag/--no-rag"),
+    session: Optional[str] = typer.Option(None, "--session", "-s"),
+):
+    """启动交互式命令行问答。"""
+    console.print(
+        Panel(
+            "RAG 知识库问答 CLI\n输入 /help 查看命令",
+            title="AI QA",
+            expand=False,
+        )
+    )
+    session_id = session or HistoryManager.new_session_id()
+    # 全进程唯一一次 asyncio.run，REPL 全程复用同一个事件循环
+    asyncio.run(_chat_repl(provider, model, rag, session_id))
 
 
 if __name__ == "__main__":
