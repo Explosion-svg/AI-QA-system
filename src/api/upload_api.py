@@ -89,7 +89,7 @@ async def upload_files(
 
     except Exception as e:
         logger.error(f"[UploadAPI] 上传失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="上传失败，请稍后重试")
 
 
 @router.get("/status", response_model=SystemStatus)
@@ -110,8 +110,8 @@ async def get_status(
         return SystemStatus(**status)
 
     except Exception as e:
-        logger.error(f"[UploadAPI] 获取状态失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取状态失败: {str(e)}")
+        logger.error(f"[UploadAPI] 获取状态失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取状态失败，请稍后重试")
 
 
 @router.delete("/clear")
@@ -136,5 +136,5 @@ async def clear_all(
             raise HTTPException(status_code=500, detail="清空失败")
 
     except Exception as e:
-        logger.error(f"[UploadAPI] 清空失败: {e}")
-        raise HTTPException(status_code=500, detail=f"清空失败: {str(e)}")
+        logger.error(f"[UploadAPI] 清空失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="清空失败，请稍后重试")

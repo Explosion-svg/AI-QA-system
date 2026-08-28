@@ -48,8 +48,11 @@ class ContextFilter:
             if per_source_count.get(source, 0) >= self.max_per_source:
                 continue
 
+            # 超长时跳过本块，继续尝试更小的块，让上下文尽量填满。
+            # 权衡：chunks 按相关性降序，这可能让低相关性小块挤掉高相关性大块
+            #（后者因超长被跳过）。比起直接 break 导致额度浪费，优先选择填满。
             if total_length + len(content) > self.max_total_length:
-                break
+                continue
 
             filtered.append(chunk)
             per_source_count[source] = per_source_count.get(source, 0) + 1

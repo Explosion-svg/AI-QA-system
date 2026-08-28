@@ -9,7 +9,7 @@ headless = true
 maxUploadSize = 200
 # 关闭 CORS 限制（局域网部署时设为 false）
 enableCORS = false
-enableXsrfProtection = false
+enableXsrfProtection = true
 
 [browser]
 # 关闭使用统计上报

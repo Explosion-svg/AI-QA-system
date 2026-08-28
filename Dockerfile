@@ -30,16 +30,11 @@ COPY . .
 # 创建必要目录
 RUN mkdir -p chat_history knowledge_base vector_db .streamlit
 
-# 暴露端口
-EXPOSE 8501
+# 暴露端口（FastAPI + Streamlit）
+EXPOSE 8000 8501
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8501/_stcore/health || exit 1
-
-# 启动命令
 ENV PYTHONPATH=/app
-CMD ["streamlit", "run", "src/app.py", \
-     "--server.port=8501", \
-     "--server.address=0.0.0.0", \
-     "--server.headless=true"]
+
+# 健康检查移到 docker-compose（api/web 两个服务各自检查不同端口）
+# 默认启动 API；Web 服务通过 docker-compose 的 command 覆盖
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

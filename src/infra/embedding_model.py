@@ -9,6 +9,8 @@ from typing import List, Optional
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
+from src.infra.config import EMBEDDING_MODEL
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +20,7 @@ class EmbeddingModel:
     负责将文本转换为向量表示
     """
 
-    def __init__(self, model_name: str = "BAAI/bge-small-zh-v1.5"):
+    def __init__(self, model_name: str = EMBEDDING_MODEL):
         """
         初始化embedding模型
 

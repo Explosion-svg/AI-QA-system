@@ -36,6 +36,7 @@ class RAGEngine:
         rrf_k: int,
         min_chunk_length: int,
         max_context_length: int,
+        rerank_model: str = "BAAI/bge-reranker-base",
     ):
         self.vector_store = vector_store
         self.document_loader = document_loader
@@ -45,7 +46,7 @@ class RAGEngine:
             query_rewriter=self.query_rewriter,
             rrf_k=rrf_k,
         )
-        self.reranker = Reranker()
+        self.reranker = Reranker(model_name=rerank_model)
         self.context_filter = ContextFilter(
             min_length=min_chunk_length,
             max_total_length=max_context_length,

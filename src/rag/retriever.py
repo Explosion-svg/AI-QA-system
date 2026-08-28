@@ -80,7 +80,6 @@ class Retriever:
         :return:
         """
         merged: Dict[str, RetrievedChunk] = {}
-        rank_offset = 0
 
         for query in queries:
             results = self.vector_store.similarity_search_with_score(query, k=top_k)
@@ -90,15 +89,15 @@ class Retriever:
                     continue
                 item = merged.get(chunk_id)
                 dense_score = 1.0 / (1.0 + max(distance, 0.0))
-                if item is None or (item.dense_rank or 10 ** 9) > rank + rank_offset:
+                # 多 query 时取最优名次（不叠加 rank_offset，避免改写 query 永远垫底）
+                if item is None or (item.dense_rank or 10 ** 9) > rank:
                     merged[chunk_id] = RetrievedChunk(
                         document=document,
                         chunk_id=chunk_id,
                         source=document.metadata.get("source", "未知来源"),
-                        dense_rank=rank + rank_offset,
+                        dense_rank=rank,
                         dense_score=dense_score,
                     )
-            rank_offset += top_k
 
         return sorted(
             merged.values(),
@@ -116,7 +115,6 @@ class Retriever:
             return []
 
         merged: Dict[str, RetrievedChunk] = {}
-        rank_offset = 0
         for query in queries:
             tokens = self.query_rewriter.tokenize(query)
             if not tokens:
@@ -135,15 +133,15 @@ class Retriever:
                 if not chunk_id:
                     continue
                 item = merged.get(chunk_id)
-                if item is None or (item.sparse_rank or 10 ** 9) > rank + rank_offset:
+                # 多 query 时取最优名次（不叠加 rank_offset，避免改写 query 永远垫底）
+                if item is None or (item.sparse_rank or 10 ** 9) > rank:
                     merged[chunk_id] = RetrievedChunk(
                         document=document,
                         chunk_id=chunk_id,
                         source=document.metadata.get("source", "未知来源"),
-                        sparse_rank=rank + rank_offset,
+                        sparse_rank=rank,
                         sparse_score=float(score),
                     )
-            rank_offset += top_k
 
         return sorted(
             merged.values(),

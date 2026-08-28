@@ -4,6 +4,7 @@ upload_service.py —— 文件上传业务服务
 职责：协调文件上传、解析、索引的完整流程
 """
 
+import asyncio
 import logging
 import hashlib
 from typing import List, Tuple
@@ -95,10 +96,12 @@ class UploadService:
                     "reason": str(e)
                 })
 
-        # 2. 构建索引
+        # 2. 构建索引（含 embedding 全量计算，阻塞，移入线程池）
         if saved_paths:
             try:
-                total_chunks = self.rag_engine.build_index(saved_paths)
+                total_chunks = await asyncio.to_thread(
+                    self.rag_engine.build_index, saved_paths
+                )
                 results["total_chunks"] = total_chunks
                 logger.info(f"[UploadService] 索引构建完成: {total_chunks} chunks")
 

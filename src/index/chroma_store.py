@@ -126,7 +126,7 @@ class ChromaStore(VectorStore):
             include=["documents", "metadatas", "distances"],
         )
 
-        documents = raw.get("documents", [[]])[0]
+        documents = raw.get("documents", [[]])[0]   # 带回文本
         metadatas = raw.get("metadatas", [[]])[0]
         distances = raw.get("distances", [[]])[0]
 

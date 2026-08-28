@@ -26,7 +26,7 @@ class DocumentLoader:
     支持 PDF、TXT、MD、DOCX 格式
     """
 
-    SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".doc"}
+    SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx"}
 
     def __init__(
         self,
@@ -100,7 +100,7 @@ class DocumentLoader:
                 loader = PyPDFLoader(str(path))
             elif suffix in {".txt", ".md"}:
                 loader = TextLoader(str(path), encoding="utf-8")
-            elif suffix in [".docx", ".doc"]:
+            elif suffix == ".docx":
                 loader = Docx2txtLoader(str(path))
             else:
                 raise ValueError(f"不支持的文件格式: {suffix}")

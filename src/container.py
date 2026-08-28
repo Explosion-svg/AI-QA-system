@@ -21,6 +21,7 @@ from src.infra.config import (
     RAG_MIN_CHUNK_LENGTH,
     RAG_RERANK_TOP_K,
     RAG_SPARSE_TOP_K,
+    RERANK_MODEL,
     RRF_K,
     VECTOR_COLLECTION_NAME,
     VECTOR_DB_DIR,
@@ -117,6 +118,7 @@ class Container:
                 rrf_k=RRF_K,
                 min_chunk_length=RAG_MIN_CHUNK_LENGTH,
                 max_context_length=RAG_MAX_CONTEXT_LENGTH,
+                rerank_model=RERANK_MODEL,
             )
             logger.info("[Container] RAGEngine已创建")
         return self._rag_engine
